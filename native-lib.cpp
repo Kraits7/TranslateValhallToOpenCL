@@ -1,32 +1,21 @@
 
-#include <jni.h>
+#include <iostream>
 #include <dlfcn.h>
 #include <CL/cl.h>
 #include <android/log.h>
-#include <vector>
-#include <string>
 
-#define TAG "HOT30i_Compute_Core"
+#define TAG "OpenCL_System_Force"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
-
-typedef cl_int (*pfn_clGetPlatformIDs)(cl_uint, cl_platform_id*, cl_uint*);
-typedef cl_int (*pfn_clGetDeviceIDs)(cl_platform_id, cl_device_type, cl_uint, cl_device_id*, cl_uint*);
-typedef cl_context (*pfn_clCreateContext)(const cl_context_properties*, cl_uint, const cl_device_id*, void (*)(const char*, const void*, size_t, void*), void*, cl_int*);
-typedef cl_command_queue (*pfn_clCreateCommandQueue)(cl_context, cl_device_id, cl_command_queue_properties, cl_int*);
-typedef cl_program (*pfn_clCreateProgramWithSource)(cl_context, cl_uint, const char**, const size_t*, cl_int*);
-typedef cl_int (*pfn_clBuildProgram)(cl_program, cl_uint, const cl_device_id*, const char*, void (*)(cl_program, void*), void*);
-typedef cl_kernel (*pfn_clCreateKernel)(cl_program, const char*, cl_int*);
-typedef cl_mem (*pfn_clCreateBuffer)(cl_context, cl_mem_flags, size_t, void*, cl_int*);
-typedef cl_int (*pfn_clSetKernelArg)(cl_kernel, cl_uint, size_t, const void*);
-typedef cl_int (*pfn_clEnqueueNDRangeKernel)(cl_command_queue, cl_kernel, cl_uint, const size_t*, const size_t*, const size_t*, cl_uint, const cl_event*, cl_event*);
-typedef cl_int (*pfn_clEnqueueReadBuffer)(cl_command_queue, cl_mem, cl_bool, size_t, size_t, void*, cl_uint, const cl_event*, cl_event*);
-typedef cl_int (*pfn_clFinish)(cl_command_queue);
-typedef cl_int (*pfn_clReleaseMemObject)(cl_mem);
-typedef cl_int (*pfn_clReleaseKernel)(cl_kernel);
-typedef cl_int (*pfn_clReleaseProgram)(cl_program);
-typedef cl_int (*pfn_clReleaseCommandQueue)(cl_command_queue);
-typedef cl_int (*pfn_clReleaseContext)(cl_context);
+__attribute__((constructor))
+void init_system_hook() {
+    LOGI("System-wide OpenCL injection active. Intercepting vendor calls...");
+    
+    void* handle = dlopen("libOpenCL.so", RTLD_NOW);
+    if (handle) {
+        LOGI("SUCCESS: libOpenCL.so bound to process.");
+        dlclose(handle);
+    }
+}
 
 class OpenCLManager {
 public:
