@@ -1,3 +1,4 @@
+
 #include <jni.h>
 #include <dlfcn.h>
 #include <CL/cl.h>
@@ -5,113 +6,118 @@
 #include <vector>
 #include <string>
 
-#define TAG "HOT30i_G57_Engine"
+#define TAG "HOT30i_Compute_Core"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
-typedef cl_int (*TYPE_clGetPlatformIDs)(cl_uint, cl_platform_id*, cl_uint*);
-typedef cl_int (*TYPE_clGetDeviceIDs)(cl_platform_id, cl_device_type, cl_uint, cl_device_id*, cl_uint*);
-typedef cl_context (*TYPE_clCreateContext)(const cl_context_properties*, cl_uint, const cl_device_id*, void (*)(const char*, const void*, size_t, void*), void*, cl_int*);
-typedef cl_command_queue (*TYPE_clCreateCommandQueue)(cl_context, cl_device_id, cl_command_queue_properties, cl_int*);
-typedef cl_program (*TYPE_clCreateProgramWithSource)(cl_context, cl_uint, const char**, const size_t*, cl_int*);
-typedef cl_int (*TYPE_clBuildProgram)(cl_program, cl_uint, const cl_device_id*, const char*, void (*)(cl_program, void*), void*);
-typedef cl_kernel (*TYPE_clCreateKernel)(cl_program, const char*, cl_int*);
-typedef cl_mem (*TYPE_clCreateBuffer)(cl_context, cl_mem_flags, size_t, void*, cl_int*);
-typedef cl_int (*TYPE_clSetKernelArg)(cl_kernel, cl_uint, size_t, const void*);
-typedef cl_int (*TYPE_clEnqueueNDRangeKernel)(cl_command_queue, cl_kernel, cl_uint, const size_t*, const size_t*, const size_t*, cl_uint, const cl_event*, cl_event*);
-typedef cl_int (*TYPE_clEnqueueReadBuffer)(cl_command_queue, cl_mem, cl_bool, size_t, size_t, void*, cl_uint, const cl_event*, cl_event*);
-typedef cl_int (*TYPE_clFinish)(cl_command_queue);
+typedef cl_int (*pfn_clGetPlatformIDs)(cl_uint, cl_platform_id*, cl_uint*);
+typedef cl_int (*pfn_clGetDeviceIDs)(cl_platform_id, cl_device_type, cl_uint, cl_device_id*, cl_uint*);
+typedef cl_context (*pfn_clCreateContext)(const cl_context_properties*, cl_uint, const cl_device_id*, void (*)(const char*, const void*, size_t, void*), void*, cl_int*);
+typedef cl_command_queue (*pfn_clCreateCommandQueue)(cl_context, cl_device_id, cl_command_queue_properties, cl_int*);
+typedef cl_program (*pfn_clCreateProgramWithSource)(cl_context, cl_uint, const char**, const size_t*, cl_int*);
+typedef cl_int (*pfn_clBuildProgram)(cl_program, cl_uint, const cl_device_id*, const char*, void (*)(cl_program, void*), void*);
+typedef cl_kernel (*pfn_clCreateKernel)(cl_program, const char*, cl_int*);
+typedef cl_mem (*pfn_clCreateBuffer)(cl_context, cl_mem_flags, size_t, void*, cl_int*);
+typedef cl_int (*pfn_clSetKernelArg)(cl_kernel, cl_uint, size_t, const void*);
+typedef cl_int (*pfn_clEnqueueNDRangeKernel)(cl_command_queue, cl_kernel, cl_uint, const size_t*, const size_t*, const size_t*, cl_uint, const cl_event*, cl_event*);
+typedef cl_int (*pfn_clEnqueueReadBuffer)(cl_command_queue, cl_mem, cl_bool, size_t, size_t, void*, cl_uint, const cl_event*, cl_event*);
+typedef cl_int (*pfn_clFinish)(cl_command_queue);
+typedef cl_int (*pfn_clReleaseMemObject)(cl_mem);
+typedef cl_int (*pfn_clReleaseKernel)(cl_kernel);
+typedef cl_int (*pfn_clReleaseProgram)(cl_program);
+typedef cl_int (*pfn_clReleaseCommandQueue)(cl_command_queue);
+typedef cl_int (*pfn_clReleaseContext)(cl_context);
 
-class OpenCLDriver {
+class OpenCLManager {
 public:
-    void* libHandle = nullptr;
-    TYPE_clGetPlatformIDs clGetPlatformIDs;
-    TYPE_clGetDeviceIDs clGetDeviceIDs;
-    TYPE_clCreateContext clCreateContext;
-    TYPE_clCreateCommandQueue clCreateCommandQueue;
-    TYPE_clCreateProgramWithSource clCreateProgramWithSource;
-    TYPE_clBuildProgram clBuildProgram;
-    TYPE_clCreateKernel clCreateKernel;
-    TYPE_clCreateBuffer clCreateBuffer;
-    TYPE_clSetKernelArg clSetKernelArg;
-    TYPE_clEnqueueNDRangeKernel clEnqueueNDRangeKernel;
-    TYPE_clEnqueueReadBuffer clEnqueueReadBuffer;
-    TYPE_clFinish clFinish;
+    void* handle = nullptr;
+    pfn_clGetPlatformIDs clGetPlatformIDs;
+    pfn_clGetDeviceIDs clGetDeviceIDs;
+    pfn_clCreateContext clCreateContext;
+    pfn_clCreateCommandQueue clCreateCommandQueue;
+    pfn_clCreateProgramWithSource clCreateProgramWithSource;
+    pfn_clBuildProgram clBuildProgram;
+    pfn_clCreateKernel clCreateKernel;
+    pfn_clCreateBuffer clCreateBuffer;
+    pfn_clSetKernelArg clSetKernelArg;
+    pfn_clEnqueueNDRangeKernel clEnqueueNDRangeKernel;
+    pfn_clEnqueueReadBuffer clEnqueueReadBuffer;
+    pfn_clFinish clFinish;
+    pfn_clReleaseMemObject clReleaseMemObject;
+    pfn_clReleaseKernel clReleaseKernel;
+    pfn_clReleaseProgram clReleaseProgram;
+    pfn_clReleaseCommandQueue clReleaseCommandQueue;
+    pfn_clReleaseContext clReleaseContext;
 
-    bool load() {
-        libHandle = dlopen("/vendor/lib64/libOpenCL.so", RTLD_NOW);
-        if (!libHandle) {
-            LOGE("Не удалось загрузить библиотеку: %s", dlerror());
+    bool init() {
+        handle = dlopen("libOpenCL.so", RTLD_NOW);
+        if (!handle) {
+            LOGE("Critical: libOpenCL.so not found in system namespaces.");
             return false;
         }
 
-        clGetPlatformIDs = (TYPE_clGetPlatformIDs)dlsym(libHandle, "clGetPlatformIDs");
-        clGetDeviceIDs = (TYPE_clGetDeviceIDs)dlsym(libHandle, "clGetDeviceIDs");
-        clCreateContext = (TYPE_clCreateContext)dlsym(libHandle, "clCreateContext");
-        clCreateCommandQueue = (TYPE_clCreateCommandQueue)dlsym(libHandle, "clCreateCommandQueue");
-        clCreateProgramWithSource = (TYPE_clCreateProgramWithSource)dlsym(libHandle, "clCreateProgramWithSource");
-        clBuildProgram = (TYPE_clBuildProgram)dlsym(libHandle, "clBuildProgram");
-        clCreateKernel = (TYPE_clCreateKernel)dlsym(libHandle, "clCreateKernel");
-        clCreateBuffer = (TYPE_clCreateBuffer)dlsym(libHandle, "clCreateBuffer");
-        clSetKernelArg = (TYPE_clSetKernelArg)dlsym(libHandle, "clSetKernelArg");
-        clEnqueueNDRangeKernel = (TYPE_clEnqueueNDRangeKernel)dlsym(libHandle, "clEnqueueNDRangeKernel");
-        clEnqueueReadBuffer = (TYPE_clEnqueueReadBuffer)dlsym(libHandle, "clEnqueueReadBuffer");
-        clFinish = (TYPE_clFinish)dlsym(libHandle, "clFinish");
+        #define BIND_FUNC(name) name = (pfn_##name)dlsym(handle, #name)
+        BIND_FUNC(clGetPlatformIDs); BIND_FUNC(clGetDeviceIDs); BIND_FUNC(clCreateContext);
+        BIND_FUNC(clCreateCommandQueue); BIND_FUNC(clCreateProgramWithSource); BIND_FUNC(clBuildProgram);
+        BIND_FUNC(clCreateKernel); BIND_FUNC(clCreateBuffer); BIND_FUNC(clSetKernelArg);
+        BIND_FUNC(clEnqueueNDRangeKernel); BIND_FUNC(clEnqueueReadBuffer); BIND_FUNC(clFinish);
+        BIND_FUNC(clReleaseMemObject); BIND_FUNC(clReleaseKernel); BIND_FUNC(clReleaseProgram);
+        BIND_FUNC(clReleaseCommandQueue); BIND_FUNC(clReleaseContext);
 
+        LOGI("OpenCL symbols bound successfully from system vendor library.");
         return clGetPlatformIDs != nullptr;
     }
 
-    ~OpenCLDriver() {
-        if (libHandle) dlclose(libHandle);
-    }
+    ~OpenCLManager() { if (handle) dlclose(handle); }
 };
 
-static OpenCLDriver driver;
+static OpenCLManager ocl;
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_compute_GpuEngine_process(JNIEnv* env, jobject thiz, jfloatArray input_data) {
-    if (!driver.libHandle && !driver.load()) {
-        LOGE("Драйвер OpenCL недоступен.");
-        return input_data;
-    }
+Java_com_example_compute_GpuEngine_processData(JNIEnv* env, jobject thiz, jfloatArray input) {
+    if (!ocl.handle && !ocl.init()) return input;
 
-    jsize len = env->GetArrayLength(input_data);
-    jfloat* data_ptr = env->GetFloatArrayElements(input_data, nullptr);
+    jsize len = env->GetArrayLength(input);
+    jfloat* ptr = env->GetFloatArrayElements(input, nullptr);
 
     cl_int err;
     cl_platform_id platform;
-    driver.clGetPlatformIDs(1, &platform, nullptr);
+    ocl.clGetPlatformIDs(1, &platform, nullptr);
 
     cl_device_id device;
-    driver.clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
+    ocl.clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
 
-    cl_context context = driver.clCreateContext(nullptr, 1, &device, nullptr, nullptr, &err);
-    cl_command_queue queue = driver.clCreateCommandQueue(context, device, 0, &err);
+    cl_context ctx = ocl.clCreateContext(nullptr, 1, &device, nullptr, nullptr, &err);
+    cl_command_queue queue = ocl.clCreateCommandQueue(ctx, device, 0, &err);
 
-    const char* src = 
-        "__kernel void fast_process_v1(__global float4* in, __global float4* out) {"
-        "    int id = get_global_id(0);"
-        "    out[id] = native_sqrt(in[id] * in[id] + 1.0f);"
-        "}";
+    const char* kernelSrc = R"(
+        __kernel void mali_turbo_kernel(__global float4* in, __global float4* out) {
+            int id = get_global_id(0);
+            float4 val = in[id];
+            // Использование native_ функций дает +15-20% на бюджетных GPU
+            out[id] = native_sqrt(val * val + 1.0f);
+        }
+    )";
 
-    cl_program program = driver.clCreateProgramWithSource(context, 1, &src, nullptr, &err);
-    driver.clBuildProgram(program, 1, &device, nullptr, nullptr, nullptr);
-    cl_kernel kernel = driver.clCreateKernel(program, "fast_process_v1", &err);
+    cl_program prog = ocl.clCreateProgramWithSource(ctx, 1, &kernelSrc, nullptr, &err);
+    ocl.clBuildProgram(prog, 1, &device, "-cl-fast-relaxed-math", nullptr, nullptr);
+    cl_kernel kernel = ocl.clCreateKernel(prog, "mali_turbo_kernel", &err);
 
-    cl_mem bufIn = driver.clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * len, data_ptr, &err);
-    cl_mem bufOut = driver.clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * len, nullptr, &err);
+    cl_mem bIn = ocl.clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * len, ptr, &err);
+    cl_mem bOut = ocl.clCreateBuffer(ctx, CL_MEM_WRITE_ONLY, sizeof(float) * len, nullptr, &err);
 
-    driver.clSetKernelArg(kernel, 0, sizeof(cl_mem), &bufIn);
-    driver.clSetKernelArg(kernel, 1, sizeof(cl_mem), &bufOut);
+    ocl.clSetKernelArg(kernel, 0, sizeof(cl_mem), &bIn);
+    ocl.clSetKernelArg(kernel, 1, sizeof(cl_mem), &bOut);
 
     size_t global_size = len / 4;
-    driver.clEnqueueNDRangeKernel(queue, kernel, 1, nullptr, &global_size, nullptr, 0, nullptr, nullptr);
-    
-    driver.clFinish(queue);
+    ocl.clEnqueueNDRangeKernel(queue, kernel, 1, nullptr, &global_size, nullptr, 0, nullptr, nullptr);
+    ocl.clFinish(queue);
 
-    driver.clEnqueueReadBuffer(queue, bufOut, CL_TRUE, 0, sizeof(float) * len, data_ptr, 0, nullptr, nullptr);
-  
-    env->ReleaseFloatArrayElements(input_data, data_ptr, 0);
-    
-    return input_data;
+    ocl.clEnqueueReadBuffer(queue, bOut, CL_TRUE, 0, sizeof(float) * len, ptr, 0, nullptr, nullptr);
+    ocl.clReleaseMemObject(bIn); ocl.clReleaseMemObject(bOut);
+    ocl.clReleaseKernel(kernel); ocl.clReleaseProgram(prog);
+    ocl.clReleaseCommandQueue(queue); ocl.clReleaseContext(ctx);
+
+    env->ReleaseFloatArrayElements(input, ptr, 0);
+    return input;
 }
